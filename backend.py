@@ -8,6 +8,7 @@ import sqlite3
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all domains on all routes
 
+#make a folder to save files
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -16,14 +17,14 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 DATABASE = 'database.db'
 
-# Function to get SQLite connection
+# Fconnect to sqlite
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE)
     return db
 
-# Function to close SQLite connection
+# close sqlite 
 @app.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, '_database', None)
@@ -43,18 +44,18 @@ def init_db():
         ''')
         db.commit()
 
-# Initialize database
+# INIT database
 init_db()
 print("Database initialized successfully")
 
-# File validation function
+# Validation funtion
 def fileValidation(filepath):
     valRes = {}
     try:
         # Load the Excel file using Pandas
         df = pd.read_excel(filepath)
 
-        # Check if the DataFrame is empty or does not have the required columns
+        # Check if the file is empty
         if df.empty:
             valRes['Not Empty'] = {'message':'File is empty', 'result':False}
         else:
@@ -73,7 +74,7 @@ def fileValidation(filepath):
             else:
                 valRes['Columns Are Numeric'] = {'message':'Values in columns are Numeric.', 'result':True}
 
-            # Check if sum of 'Value A' column equals 1
+            # Check if sum of column 'Value A' is 1
             sumOfA = df["Value A"].sum()
             if not sumOfA == 1:
                 valRes['Sum of A'] = {'message':f'Sum of values in column Value A is {round(sumOfA,2)} which is not 1', 'result':False}
@@ -84,17 +85,17 @@ def fileValidation(filepath):
         if all(criteriasMet):
             return True, valRes
         else:
-            not_true_results = [item['message'] for item in valRes.values() if not item['result']]
             return False, valRes
 
     except Exception as e:
         print(f"Error validating file: {str(e)}")
         return False, f"Error validating file: {str(e)}"
 
-# Upload file endpoint
+# Endpoint for uplud
 @app.route('/upload', methods=['POST'])
 def upload_file():
     try:
+        #some validation here to check file initially
         if 'file' not in request.files:
             return jsonify({'message': 'No file part in the request'}), 400
         
@@ -110,23 +111,23 @@ def upload_file():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        # Validate the uploaded file
+        # Start validation using the function fileValidation after we upload the file to a storage
         is_valid, message = fileValidation(filepath)
 
-        # Store upload history in SQLite database
+        # Store history inside database
         with app.app_context():
             db = get_db()
             cur = db.cursor()
             cur.execute("INSERT INTO uploads (filename, valid) VALUES (?, ?)", (filename, is_valid))
             db.commit()
             cur.close()
-
+        #return result even if has not met requirement and send 200
         return jsonify({'status': is_valid, 'message': message}), 200
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# History endpoint
+# Endpoint for history
 @app.route('/history', methods=['GET'])
 def get_history():
     try:
